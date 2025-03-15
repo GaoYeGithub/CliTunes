@@ -18,6 +18,9 @@ Requires-Dist: spotipy
 Dynamic: author
 Dynamic: author-email
 Dynamic: classifier
+Dynamic: description
 Dynamic: requires-dist
 Dynamic: requires-python
 Dynamic: summary
+
+CliTunes is a terminal music player that supports playing local music files and streaming from Spotify.
