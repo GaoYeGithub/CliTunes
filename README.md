@@ -68,6 +68,5 @@ In the player interface:
 - **P**: Previous track
 - **+**: Volume up
 - **-**: Volume down
-- **V**: Switch visualizer pattern
 - **R**: Play random track
 - **Q**: Quit
