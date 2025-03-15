@@ -1,14 +1,11 @@
 import os
-import sys
 import time
 import random
 import argparse
 import curses
-import threading
 import json
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Tuple
-import numpy as np
 import pygame
 from pygame import mixer
 import requests
@@ -344,185 +341,12 @@ def text_based_ui():
         else:
             print("Unknown command")
 
-class ASCIIVisualizer:
-    def __init__(self, player, stdscr):
-        self.player = player
-        self.stdscr = stdscr
-        self.running = False
-        self.thread = None
-        self.fft_data = np.zeros(64)
-        self.patterns = [
-            self._pattern_bars,
-            self._pattern_wave,
-            self._pattern_spectrum
-        ]
-        self.current_pattern = 0
-        self.colors = self._init_colors()
-
-    def _init_colors(self):
-        if curses.has_colors():
-            curses.start_color()
-            curses.use_default_colors()
-            for i in range(1, curses.COLORS):
-                curses.init_pair(i, i, -1)
-            return True
-        return False
-
-    def start(self):
-        if self.running:
-            return
-        
-        self.running = True
-        self.thread = threading.Thread(target=self._run)
-        self.thread.daemon = True
-        self.thread.start()
-
-    def stop(self):
-        self.running = False
-        if self.thread:
-            self.thread.join()
-
-    def _run(self):
-        while self.running:
-            if self.player.playing and not self.player.paused:
-                self._update_fft_data()
-                self._draw()
-            time.sleep(0.05)
-
-    def _update_fft_data(self):
-        self.fft_data = np.random.rand(64) * 0.5
-        for i in range(5):
-            pos = random.randint(0, 63)
-            self.fft_data[pos] = random.random() * 0.5 + 0.5
-
-    def _draw(self):
-        try:
-            self.stdscr.erase()
-            height, width = self.stdscr.getmaxyx()
-            
-            self._draw_header(height, width)
-            
-            if height > 6 and width > 10:
-                pattern_func = self.patterns[self.current_pattern]
-                pattern_func(height, width)
-            
-            self._draw_footer(height, width)
-            
-            self.stdscr.refresh()
-        except curses.error:
-            pass
-
-    def _draw_header(self, height, width):
-        if self.player.current_track:
-            status = "▶" if self.player.playing and not self.player.paused else "⏸"
-            title = f"{status} {self.player.current_track.title}"
-            artist = f"♫ {self.player.current_track.artist}"
-            vol = f"Vol: {int(self.player.volume * 100)}%"
-            
-            max_title = width - len(vol) - 3
-            self.stdscr.addstr(0, 0, title[:max_title])
-            self.stdscr.addstr(0, width - len(vol), vol)
-            self.stdscr.addstr(1, 0, artist[:width-1])
-
-    def _draw_footer(self, height, width):
-        if height < 5 or width < 10:
-            return
-        
-        if self.player.current_track and self.player.current_track.duration > 0:
-            progress = self.player.position / self.player.current_track.duration
-            bar_width = width - 10
-            filled = int(bar_width * progress)
-            progress_bar = "[" + "■" * filled + " " * (bar_width - filled) + "]"
-            time_str = f"{self._format_time(self.player.position)} / {self._format_time(self.player.current_track.duration)}"
-            self.stdscr.addstr(height-3, 0, progress_bar)
-            self.stdscr.addstr(height-3, len(progress_bar)+1, time_str)
-        
-        controls = [
-            "SPACE: Play/Pause",
-            "N: Next",
-            "P: Previous",
-            "V: Visuals",
-            "+/-: Volume",
-            "Q: Quit"
-        ]
-        y = height - 2
-        x = 0
-        for control in controls:
-            if x + len(control) < width - 1:
-                self.stdscr.addstr(y, x, control)
-                x += len(control) + 2
-
-    def _format_time(self, seconds):
-        mins = int(seconds // 60)
-        secs = int(seconds % 60)
-        return f"{mins:02d}:{secs:02d}"
-
-    def _pattern_bars(self, height, width):
-        bar_count = min(width, len(self.fft_data))
-        start_y = 3
-        viz_height = height - 6
-        
-        for i in range(bar_count):
-            amp = self.fft_data[i]
-            bar_height = int(amp * viz_height)
-            color = int(amp * 100) % (curses.COLORS - 1) + 1 if self.colors else 0
-            
-            for j in range(bar_height):
-                y = start_y + viz_height - j - 1
-                if y < height - 4:
-                    char = '█' if j == bar_height - 1 else '░'
-                    if color:
-                        self.stdscr.addstr(y, i, char, curses.color_pair(color))
-                    else:
-                        self.stdscr.addstr(y, i, char)
-
-    def _pattern_wave(self, height, width):
-        start_y = 3
-        viz_height = height - 6
-        mid_y = start_y + viz_height // 2
-        
-        for i in range(width):
-            amp = self.fft_data[i % len(self.fft_data)]
-            y = int(mid_y + amp * (viz_height // 2 - 1))
-            y = max(start_y, min(y, start_y + viz_height - 1))
-            
-            if self.colors:
-                color = int(amp * 100) % (curses.COLORS - 1) + 1
-                self.stdscr.addstr(y, i, '●', curses.color_pair(color))
-            else:
-                self.stdscr.addstr(y, i, '●')
-
-    def _pattern_spectrum(self, height, width):
-        start_y = 3
-        viz_height = height - 6
-        chars = ' ▁▂▃▄▅▆▇'
-        
-        for i in range(width):
-            amp = self.fft_data[i % len(self.fft_data)]
-            char_idx = min(int(amp * (len(chars) - 1)), len(chars) - 1)
-            color = int(amp * 100) % (curses.COLORS - 1) + 1 if self.colors else 0
-            
-            for j in range(viz_height):
-                y = start_y + viz_height - j - 1
-                if j <= char_idx:
-                    if color:
-                        self.stdscr.addstr(y, i, chars[j], curses.color_pair(color))
-                    else:
-                        self.stdscr.addstr(y, i, chars[j])
-
-    def next_pattern(self):
-        self.current_pattern = (self.current_pattern + 1) % len(self.patterns)
-
-
 def main_ui(stdscr):
     curses.curs_set(0)
     stdscr.nodelay(1)
     stdscr.timeout(100)
     
     player = Player()
-    visualizer = ASCIIVisualizer(player, stdscr)
-    player.attach_visualizer(visualizer)
-    visualizer.start()
     
     running = True
     while running:
@@ -546,8 +370,6 @@ def main_ui(stdscr):
                 player.next_track()
             elif key == ord('p'):
                 player.prev_track()
-            elif key == ord('v'):
-                visualizer.next_pattern()
             elif key == ord('+'):
                 player.set_volume(player.volume + 0.05)
             elif key == ord('-'):
@@ -558,7 +380,6 @@ def main_ui(stdscr):
         except curses.error:
             pass
     
-    visualizer.stop()
     player.stop()
 
 
@@ -572,9 +393,6 @@ def get_lyrics(artist, title):
 def play_random():
     def _handle_ui(stdscr):
         player = Player()
-        visualizer = ASCIIVisualizer(player, stdscr)
-        player.attach_visualizer(visualizer)
-        visualizer.start()
         
         player.play_random()
         
@@ -591,12 +409,10 @@ def play_random():
                         player.pause()
                 elif key == ord('n'):
                     player.play_random()
-                elif key == ord('v'):
-                    visualizer.next_pattern()
+
             except curses.error:
                 pass
         
-        visualizer.stop()
         player.stop()
     
     curses.wrapper(_handle_ui)
@@ -620,9 +436,6 @@ def search_spotify(query):
             def _handle_ui(stdscr):
                 ui_player = Player()
                 ui_player.playlist = tracks
-                visualizer = ASCIIVisualizer(ui_player, stdscr)
-                ui_player.attach_visualizer(visualizer)
-                visualizer.start()
                 
                 ui_player.play_track(tracks[choice-1])
                 
@@ -641,12 +454,9 @@ def search_spotify(query):
                             ui_player.next_track()
                         elif key == ord('p'):
                             ui_player.prev_track()
-                        elif key == ord('v'):
-                            visualizer.next_pattern()
                     except curses.error:
                         pass
                 
-                visualizer.stop()
                 ui_player.stop()
             
             curses.wrapper(_handle_ui)
