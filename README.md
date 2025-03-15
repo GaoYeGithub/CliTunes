@@ -4,7 +4,7 @@ CliTunes is a terminal music player that supports playing local music files and 
 
 ## Features
 
-- Play local MP3, WAV, OGG, and FLAC files
+- Play local audio files
 - Spotify integration for search
 - Lyrics fetching for songs
 - Random play functionality
@@ -13,7 +13,7 @@ CliTunes is a terminal music player that supports playing local music files and 
 
 ### From PyPI
 ```bash
-pip install clitunes
+pip install CliTunesGithub==0.1.0
 ```
 
 ### From Source
