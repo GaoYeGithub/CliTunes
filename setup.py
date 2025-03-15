@@ -4,6 +4,7 @@ setup(
     name="CliTunesGithub",
     version="0.1.0",
     description="Terminal Music Player",
+    long_description="CliTunes is a terminal music player that supports playing local music files and streaming from Spotify.",
     author="Ye Gao",
     author_email="ye.gao@student.tdsb.on.ca",
     packages=find_packages(),
