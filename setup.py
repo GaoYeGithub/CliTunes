@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="clitunes",
+    name="CliTunesGithub",
     version="0.1.0",
     description="Terminal Music Player",
     author="Ye Gao",
