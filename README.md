@@ -30,11 +30,11 @@ On first run, CliTunes will create a configuration file at `~/.config/clitunes/c
 
 
 1. Music directories where your local files are stored
-    - Window Directory example (  "music_dirs": ["C:\\Users\\<profilename>\\OneDrive\\Music"])
-
+    - Window Directory example 
+    ```bash
+    "music_dirs": ["C:\\Users\\<profilename>\\OneDrive\\Music"]
+    ```
 2. Spotify API credentials (client ID and client secret) (Optional)
-
-
 
 ### Spotify API Credentials
 
