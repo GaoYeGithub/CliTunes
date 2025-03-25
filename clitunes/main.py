@@ -11,6 +11,8 @@ from pygame import mixer
 import requests
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
+import mutagen
+import signal
 
 CONFIG_DIR = os.path.expanduser("~/.config/clitunes")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
@@ -66,8 +68,21 @@ class Player:
             os.makedirs(CACHE_DIR)
 
     def setup_audio(self):
-        pygame.init()
-        mixer.init()
+        try:
+            pygame.display.init()
+            pygame.display.set_mode((1, 1), pygame.HIDDEN)
+            pygame.display.iconify()
+            
+            mixer.init(
+                frequency=44100,
+                size=-16,
+                channels=2,
+                buffer=4096
+            )
+        except Exception as e:
+            print(f"Audio initialization error: {e}")
+            pygame.init()
+            mixer.init()
 
     def setup_spotify(self):
         spotify_config = self.config.get("spotify", {})
@@ -94,17 +109,33 @@ class Player:
                     for file in files:
                         if file.lower().endswith(('.mp3', '.wav', '.ogg', '.flac')):
                             path = os.path.join(root, file)
-                            title = os.path.splitext(file)[0]
-                            artist = "Unknown"
-                            album = "Unknown"
-                            duration = 0
-                            self.local_tracks.append(Track(
-                                title=title,
-                                artist=artist,
-                                album=album,
-                                duration=duration,
-                                path=path
-                            ))
+                            try:
+                                title = os.path.splitext(file)[0]
+                                artist = "Unknown"
+                                album = "Unknown"
+                                duration = 0
+
+                                try:
+                                    import mutagen
+                                    audio = mutagen.File(path, easy=True)
+                                    if audio:
+                                        title = audio.get('title', [title])[0]
+                                        artist = audio.get('artist', [artist])[0]
+                                        album = audio.get('album', [album])[0]
+                                        duration = int(audio.info.length) if hasattr(audio, 'info') else 0
+                                except ImportError:
+                                    pass
+
+                                self.local_tracks.append(Track(
+                                    title=title,
+                                    artist=artist,
+                                    album=album,
+                                    duration=duration,
+                                    path=path
+                                ))
+                            except Exception as e:
+                                print(f"Error processing {path}: {e}")
+        
         print(f"Loaded {len(self.local_tracks)} local tracks")
 
     def play_track(self, track: Track):
@@ -114,11 +145,20 @@ class Player:
         self.current_track = track
         
         if track.path:
-            mixer.music.load(track.path)
-            mixer.music.set_volume(self.volume)
-            mixer.music.play()
-            self.playing = True
-            self.paused = False
+            try:
+                audio = mutagen.File(track.path)
+                
+                if track.path.lower().endswith('.mp3'):
+                    mixer.init(frequency=44100, size=-16, channels=2, buffer=4096)
+                
+                mixer.music.load(track.path)
+                mixer.music.set_volume(self.volume)
+                mixer.music.play()
+                self.playing = True
+                self.paused = False
+            except Exception as e:
+                print(f"Error playing track {track.title}: {e}")
+                self.playing = False
         elif track.spotify_id and self.spotify:
             try:
                 self.spotify.start_playback(uris=[f"spotify:track:{track.spotify_id}"])
@@ -342,6 +382,8 @@ def text_based_ui():
             print("Unknown command")
 
 def main_ui(stdscr):
+    os.kill(os.getpid(), signal.SIGINT)
+
     curses.curs_set(0)
     stdscr.nodelay(1)
     stdscr.timeout(100)
@@ -468,7 +510,6 @@ def parse_arguments():
 
     parser = argparse.ArgumentParser(description="CliTunes - Terminal-Based Music Player")
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
-    play_parser = subparsers.add_parser("play", help="Play music with visualizer")
     random_parser = subparsers.add_parser("random", help="Play random track")
     lyrics_parser = subparsers.add_parser("lyrics", help="Fetch lyrics for a song")
     lyrics_parser.add_argument("title", help="Song title")
